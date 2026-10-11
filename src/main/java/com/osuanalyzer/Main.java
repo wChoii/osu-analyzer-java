@@ -46,7 +46,20 @@ public class Main {
             .build();
 
             HttpResponse<String> userResponse = client.send(userRequest, HttpResponse.BodyHandlers.ofString());
-            System.out.println(userResponse.body());
+            JsonObject userData = JsonParser.parseString(userResponse.body())
+                .getAsJsonObject();
+            //use Gson to read data
+            String username = userData.get("username").getAsString();
+            JsonObject stats = userData.getAsJsonObject("statistics");
+
+            double pp = stats.get("pp").getAsDouble();
+            int globalRank = stats.get("global_rank").getAsInt();
+            double accuracy = stats.get("hit_accuracy").getAsDouble();
+
+            System.out.println("Username: " + username);
+            System.out.println("PP: " + pp);
+            System.out.println("Global Rank: " + globalRank);
+            System.out.println("Accuracy: " + accuracy + "%");
     }
 
     private static String getEnvValue(String key) throws IOException {

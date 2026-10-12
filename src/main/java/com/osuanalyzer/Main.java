@@ -51,14 +51,15 @@ public class Main {
                 throw new IOException("User request failed: " + userResponse.statusCode());
             }
 
-        JsonObject userData = JsonParser.parseString(userResponse.body())
+            //use Gson to parse the JSON response
+            JsonObject userData = JsonParser.parseString(userResponse.body())
                 .getAsJsonObject();
-
-            //use Gson to read data
+            
             int userId = userData.get("id").getAsInt();
             String username = userData.get("username").getAsString();
             JsonObject stats = userData.getAsJsonObject("statistics");
 
+            //look at specific stats
             double pp = stats.get("pp").getAsDouble();
             //checck if global rank is null;
             if (stats.get("global_rank") == null || stats.get("global_rank").isJsonNull()) {
@@ -90,11 +91,9 @@ public class Main {
 
         JsonArray scores = JsonParser.parseString(scoresResponse.body())
             .getAsJsonArray();
-        System.out.println("Number of top scores fetched: " + scores.size());
-
-            
-            
+        System.out.println("Number of top scores fetched: " + scores.size());  
     }
+
 
     private static String getEnvValue(String key) throws IOException {
         for (String line : java.nio.file.Files.readAllLines(java.nio.file.Path.of(".env"))) {
@@ -104,5 +103,4 @@ public class Main {
         }
         throw new IOException("Missing " + key + " in .env");
     }
-
 }

@@ -71,7 +71,7 @@ public class APIServer {
 
                 // Analyze scores
                 ScoreAnalysis analysis =
-                    ScoreAnalyzer.analyzeScores(scores);
+                    ScoreAnalyzer.analyzeScores(scores, client, accessToken);
 
                 // Build JSON response
                 JsonObject result = new JsonObject();

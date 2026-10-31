@@ -1,106 +1,66 @@
 package com.osuanalyzer;
-
-import java.io.IOException;
-import java.net.URI;
+import java.util.Scanner;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-
-//parse OAuth with Gson
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.google.gson.JsonArray;
 
 public class Main {
     public static void main(String[] args) throws Exception {
-        String clientId = getEnvValue("OSU_CLIENT_ID");
-        String clientSecret = getEnvValue("OSU_CLIENT_SECRET");
-        String body = "client_id=" + clientId
-            + "&client_secret=" + clientSecret
-            + "&grant_type=client_credentials"
-            + "&scope=public";
-        HttpClient client = HttpClient.newHttpClient();
-
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("https://osu.ppy.sh/oauth/token"))
-            .header("Accept", "application/json")
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-
-        HttpResponse<String> response =
-            client.send(request, HttpResponse.BodyHandlers.ofString());
-
-        if (response.statusCode() != 200) {
-            throw new IOException("Token request failed: " + response.statusCode());
-        }
-        JsonObject tokenData = JsonParser.parseString(response.body()).getAsJsonObject();
-
-        String accessToken = tokenData.get("access_token").getAsString();
         
-        HttpRequest userRequest = HttpRequest.newBuilder()
-            .uri(URI.create("https://osu.ppy.sh/api/v2/users/peppy/osu"))
-            .header("Authorization", "Bearer " + accessToken)
-            .header("Accept", "application/json")
-            .GET()
-            .build();
+        HttpClient client = HttpClient.newHttpClient();
+        String accessToken = OsuApi.getAccessToken(client);
+        
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("Enter osu! username: ");
+        String user = scanner.nextLine();
+        JsonObject userData;
+        try {
+            userData = OsuApi.fetchUser(client, accessToken, user);
+        } catch (Exception e) {
+            System.out.println("Error fetching user data: ");
+            return;
+        }
 
-        HttpResponse<String> userResponse = client.send(userRequest, HttpResponse.BodyHandlers.ofString());
 
-            if (userResponse.statusCode() != 200) {
-                throw new IOException("User request failed: " + userResponse.statusCode());
-            }
+        int userId = userData.get("id").getAsInt();
+        String username = userData.get("username").getAsString();
+        JsonObject stats = userData.getAsJsonObject("statistics");
 
-            //use Gson to parse the JSON response
-            JsonObject userData = JsonParser.parseString(userResponse.body())
-                .getAsJsonObject();
-            
-            int userId = userData.get("id").getAsInt();
-            String username = userData.get("username").getAsString();
-            JsonObject stats = userData.getAsJsonObject("statistics");
+        JsonArray scores;
+        try {
+            scores = OsuApi.fetchTopScores(client, accessToken, userId);
+        } catch (Exception e) {
+            System.out.println("Error fetching top scores: " + e.getMessage());
+            return;
+        }
 
-            //look at specific stats
-            double pp = stats.get("pp").getAsDouble();
-            //checck if global rank is null;
-            if (stats.get("global_rank") == null || stats.get("global_rank").isJsonNull()) {
+        //look at specific stats
+        double pp = stats.get("pp").getAsDouble();
+        //checck if global rank is null;
+        if (stats.get("global_rank") == null || stats.get("global_rank").isJsonNull()) {
                 System.out.println("Global Rank Is Currently Unavailable");
-            }
-            else {
-                int globalRank = stats.get("global_rank").getAsInt();
-                System.out.println("Global Rank: " + globalRank);
-            }
-            double accuracy = stats.get("hit_accuracy").getAsDouble();
-
-            System.out.println("Username: " + username);
-            System.out.println("PP: " + pp);
-            System.out.println("Accuracy: " + accuracy + "%");
-
-        HttpRequest scoresRequest = HttpRequest.newBuilder()
-            .uri(URI.create("https://osu.ppy.sh/api/v2/users/" + userId + "/scores/best?mode=osu&limit=100"))
-            .header("Authorization", "Bearer " + accessToken)
-            .header("Accept", "application/json")
-            .GET()
-            .build();
-
-        //score results
-        HttpResponse<String> scoresResponse =
-            client.send(scoresRequest, HttpResponse.BodyHandlers.ofString());
-        if (scoresResponse.statusCode() != 200) {
-            throw new IOException("Scores request failed: " + scoresResponse.statusCode());
         }
+        else {
+            int globalRank = stats.get("global_rank").getAsInt();
+            System.out.println("Global Rank: " + globalRank);   
+        }
+        double accuracy = stats.get("hit_accuracy").getAsDouble();
 
-        JsonArray scores = JsonParser.parseString(scoresResponse.body())
-            .getAsJsonArray();
+        System.out.println("Username: " + username);
+        System.out.println("User ID: " + userId);
+        System.out.println("PP: " + pp);
+        System.out.println("Accuracy: " + accuracy + "%");
+        
         System.out.println("Number of top scores fetched: " + scores.size());  
-    }
 
+        ScoreAnalysis analysis = ScoreAnalyzer.analyzeScores(scores);
 
-    private static String getEnvValue(String key) throws IOException {
-        for (String line : java.nio.file.Files.readAllLines(java.nio.file.Path.of(".env"))) {
-            if (line.startsWith(key + "=")) {
-                return line.substring(key.length() + 1);
-            }
+        System.out.println("Average PP: " + analysis.getAveragePp());
+        System.out.println("Average Accuracy: " + analysis.getAverageAccuracy() + "%");
+        System.out.println("Highest PP: " + analysis.getHighestPp());
+
+        for (ScoreData score : analysis.getScores()) {
+            System.out.println("PP: " + score.getPp() + " | Accuracy: " + score.getAccuracy() + "%" + " | Max Combo: " + score.getMaxCombo());
         }
-        throw new IOException("Missing " + key + " in .env");
     }
 }
